@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 
-const IA_URL = "http://127.0.0.1:8001";
+const IA_URL = import.meta.env.VITE_IA_URL || "http://127.0.0.1:8001";
 
 export default function Camera({ onCapture, onBack }) {
   const videoRef = useRef(null);
