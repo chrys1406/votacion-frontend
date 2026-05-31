@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import * as faceapi from "face-api.js";
+
+const IA_URL = import.meta.env.VITE_IA_URL || "http://127.0.0.1:8001";
 
 export default function Camera({ onCapture, onBack }) {
   const videoRef = useRef(null);
@@ -13,17 +14,12 @@ export default function Camera({ onCapture, onBack }) {
   const [capturing, setCapturing] = useState(false);
   const [rostroValido, setRostroValido] = useState(false);
   const [mensajeRostro, setMensajeRostro] = useState("Posiciona tu rostro frente a la cámara");
-  const [modelosCargados, setModelosCargados] = useState(false);
 
-  // Cargar modelos al montar
   useEffect(() => {
-    const cargarModelos = async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
-      await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
-      setModelosCargados(true);
+    return () => {
+      stopCamera();
+      clearInterval(validacionIntervalRef.current);
     };
-    cargarModelos();
-    return () => stopCamera();
   }, []);
 
   useEffect(() => {
@@ -51,50 +47,40 @@ export default function Camera({ onCapture, onBack }) {
     setMensajeRostro("Posiciona tu rostro frente a la cámara");
   };
 
-  const iniciarValidacionLocal = useCallback(() => {
+  const capturarFrame = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) return null;
+    canvas.width = 320;
+    canvas.height = 240;
+    canvas.getContext("2d").drawImage(video, 0, 0, 320, 240);
+    return canvas.toDataURL("image/jpeg", 0.6);
+  }, []);
+
+  const iniciarValidacionTiempoReal = useCallback(() => {
     validacionIntervalRef.current = setInterval(async () => {
-      const video = videoRef.current;
-      if (!video || !modelosCargados || video.readyState < 2) return;
-
-      const deteccion = await faceapi
-      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-      .withFaceLandmarks();
-
-console.log("Detección:", deteccion);
-console.log("Modelos cargados:", modelosCargados);
-
-      if (!deteccion) {
+      const frame = capturarFrame();
+      if (!frame) return;
+      try {
+        const res = await fetch(`${IA_URL}/validar-frame`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imagen: frame }),
+        });
+        const data = await res.json();
+        setRostroValido(data.valido);
+        setMensajeRostro(data.mensaje);
+      } catch {
         setRostroValido(false);
-        setMensajeRostro("No se detectó ningún rostro. Mira directo a la cámara");
-        return;
+        setMensajeRostro("Error al conectar con el servidor");
       }
-
-      const { box } = deteccion.detection;
-      const videoArea = video.videoWidth * video.videoHeight;
-      const faceArea = box.width * box.height;
-      const faceRatio = faceArea / videoArea;
-
-      if (faceRatio < 0.05) {
-        setRostroValido(false);
-        setMensajeRostro("Acércate más a la cámara");
-        return;
-      }
-
-      if (faceRatio > 0.6) {
-        setRostroValido(false);
-        setMensajeRostro("Aléjate un poco de la cámara");
-        return;
-      }
-
-      setRostroValido(true);
-      setMensajeRostro("Rostro detectado correctamente");
-    }, 500); // cada 500ms — muy fluido
-  }, [modelosCargados]);
+    }, 6000);
+  }, [capturarFrame]);
 
   const handleOpenCamera = () => {
     setFullscreen(true);
     startCamera();
-    setTimeout(() => iniciarValidacionLocal(), 1000);
+    setTimeout(() => iniciarValidacionTiempoReal(), 1000);
   };
 
   const handleCapture = () => {
@@ -121,7 +107,7 @@ console.log("Modelos cargados:", modelosCargados);
     setPhoto(null);
     setFullscreen(true);
     startCamera();
-    setTimeout(() => iniciarValidacionLocal(), 1000);
+    setTimeout(() => iniciarValidacionTiempoReal(), 1000);
   };
 
   const handleBack = () => {
@@ -139,22 +125,21 @@ console.log("Modelos cargados:", modelosCargados);
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", transform: "scaleX(-1)", margin: 0, padding: 0, display: "block", backgroundColor: "black" }}
       />
 
-      {/* INDICADOR TIEMPO REAL */}
       {!capturing && streaming && (
         <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, zIndex: 100000 }}>
           <div style={{
             width: 16, height: 16, borderRadius: "50%",
-            backgroundColor: !modelosCargados ? "#888" : rostroValido ? "#22c55e" : "#ef4444",
-            boxShadow: !modelosCargados ? "none" : rostroValido ? "0 0 12px #22c55e" : "0 0 12px #ef4444",
+            backgroundColor: rostroValido ? "#22c55e" : "#ef4444",
+            boxShadow: rostroValido ? "0 0 12px #22c55e" : "0 0 12px #ef4444",
             transition: "all 0.3s ease",
           }} />
           <div style={{
             backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: "6px 16px",
-            color: !modelosCargados ? "#888" : rostroValido ? "#22c55e" : "#ef4444",
+            color: rostroValido ? "#22c55e" : "#ef4444",
             fontSize: 13, fontWeight: "bold", textAlign: "center", maxWidth: "80%",
             transition: "all 0.3s ease",
           }}>
-            {!modelosCargados ? "⏳ Cargando detector..." : rostroValido ? "✅ " : "⚠️ "}{modelosCargados && mensajeRostro}
+            {rostroValido ? "✅ " : "⚠️ "}{mensajeRostro}
           </div>
         </div>
       )}
