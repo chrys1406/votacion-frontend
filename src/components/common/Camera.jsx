@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-
-const IA_URL = import.meta.env.VITE_IA_URL || "http://127.0.0.1:8001";
+import * as faceapi from "face-api.js";
 
 export default function Camera({ onCapture, onBack }) {
   const videoRef = useRef(null);
@@ -14,12 +13,17 @@ export default function Camera({ onCapture, onBack }) {
   const [capturing, setCapturing] = useState(false);
   const [rostroValido, setRostroValido] = useState(false);
   const [mensajeRostro, setMensajeRostro] = useState("Posiciona tu rostro frente a la cámara");
+  const [modelosCargados, setModelosCargados] = useState(false);
 
+  // Cargar modelos al montar
   useEffect(() => {
-    return () => {
-      stopCamera();
-      clearInterval(validacionIntervalRef.current);
+    const cargarModelos = async () => {
+      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+      await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
+      setModelosCargados(true);
     };
+    cargarModelos();
+    return () => stopCamera();
   }, []);
 
   useEffect(() => {
@@ -47,41 +51,47 @@ export default function Camera({ onCapture, onBack }) {
     setMensajeRostro("Posiciona tu rostro frente a la cámara");
   };
 
-  const capturarFrame = useCallback(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < 2) return null;
-    canvas.width = 320;
-    canvas.height = 240;
-    canvas.getContext("2d").drawImage(video, 0, 0, 320, 240);
-    return canvas.toDataURL("image/jpeg", 0.6);
-  }, []);
-
-  const iniciarValidacionTiempoReal = useCallback(() => {
+  const iniciarValidacionLocal = useCallback(() => {
     validacionIntervalRef.current = setInterval(async () => {
-      const frame = capturarFrame();
-      if (!frame) return;
-      try {
-        const res = await fetch(`${IA_URL}/validar-frame`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imagen: frame }),
-        });
-        const data = await res.json();
-        setRostroValido(data.valido);
-        setMensajeRostro(data.mensaje);
-      } catch {
+      const video = videoRef.current;
+      if (!video || !modelosCargados || video.readyState < 2) return;
+
+      const deteccion = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks();
+
+      if (!deteccion) {
         setRostroValido(false);
-        setMensajeRostro("Error al conectar con el servidor");
+        setMensajeRostro("No se detectó ningún rostro. Mira directo a la cámara");
+        return;
       }
-    }, 4000);
-  }, [capturarFrame]);
+
+      const { box } = deteccion.detection;
+      const videoArea = video.videoWidth * video.videoHeight;
+      const faceArea = box.width * box.height;
+      const faceRatio = faceArea / videoArea;
+
+      if (faceRatio < 0.05) {
+        setRostroValido(false);
+        setMensajeRostro("Acércate más a la cámara");
+        return;
+      }
+
+      if (faceRatio > 0.6) {
+        setRostroValido(false);
+        setMensajeRostro("Aléjate un poco de la cámara");
+        return;
+      }
+
+      setRostroValido(true);
+      setMensajeRostro("Rostro detectado correctamente");
+    }, 500); // cada 500ms — muy fluido
+  }, [modelosCargados]);
 
   const handleOpenCamera = () => {
     setFullscreen(true);
     startCamera();
-    // Espera 1 seg a que la cámara arranque antes de validar
-    setTimeout(() => iniciarValidacionTiempoReal(), 1000);
+    setTimeout(() => iniciarValidacionLocal(), 1000);
   };
 
   const handleCapture = () => {
@@ -108,7 +118,7 @@ export default function Camera({ onCapture, onBack }) {
     setPhoto(null);
     setFullscreen(true);
     startCamera();
-    setTimeout(() => iniciarValidacionTiempoReal(), 1000);
+    setTimeout(() => iniciarValidacionLocal(), 1000);
   };
 
   const handleBack = () => {
@@ -128,39 +138,20 @@ export default function Camera({ onCapture, onBack }) {
 
       {/* INDICADOR TIEMPO REAL */}
       {!capturing && streaming && (
-        <div style={{
-          position: "absolute",
-          top: 20,
-          left: 0,
-          right: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 8,
-          zIndex: 100000,
-        }}>
-          {/* Círculo indicador */}
+        <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, zIndex: 100000 }}>
           <div style={{
-            width: 16,
-            height: 16,
-            borderRadius: "50%",
-            backgroundColor: rostroValido ? "#22c55e" : "#ef4444",
-            boxShadow: rostroValido ? "0 0 12px #22c55e" : "0 0 12px #ef4444",
+            width: 16, height: 16, borderRadius: "50%",
+            backgroundColor: !modelosCargados ? "#888" : rostroValido ? "#22c55e" : "#ef4444",
+            boxShadow: !modelosCargados ? "none" : rostroValido ? "0 0 12px #22c55e" : "0 0 12px #ef4444",
             transition: "all 0.3s ease",
           }} />
-          {/* Mensaje */}
           <div style={{
-            backgroundColor: "rgba(0,0,0,0.6)",
-            borderRadius: 12,
-            padding: "6px 16px",
-            color: rostroValido ? "#22c55e" : "#ef4444",
-            fontSize: 13,
-            fontWeight: "bold",
-            textAlign: "center",
-            maxWidth: "80%",
+            backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: "6px 16px",
+            color: !modelosCargados ? "#888" : rostroValido ? "#22c55e" : "#ef4444",
+            fontSize: 13, fontWeight: "bold", textAlign: "center", maxWidth: "80%",
             transition: "all 0.3s ease",
           }}>
-            {rostroValido ? "✅ " : "⚠️ "}{mensajeRostro}
+            {!modelosCargados ? "⏳ Cargando detector..." : rostroValido ? "✅ " : "⚠️ "}{modelosCargados && mensajeRostro}
           </div>
         </div>
       )}
@@ -179,15 +170,11 @@ export default function Camera({ onCapture, onBack }) {
             onClick={handleCapture}
             disabled={!streaming || !rostroValido}
             style={{
-              width: 80,
-              height: 80,
-              borderRadius: "50%",
+              width: 80, height: 80, borderRadius: "50%",
               backgroundColor: rostroValido ? "white" : "rgba(255,255,255,0.3)",
               border: `4px solid ${rostroValido ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)"}`,
               boxShadow: rostroValido ? "0 0 30px rgba(255,255,255,0.4)" : "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              display: "flex", alignItems: "center", justifyContent: "center",
               cursor: rostroValido ? "pointer" : "not-allowed",
               transition: "all 0.3s ease",
             }}
@@ -209,10 +196,7 @@ export default function Camera({ onCapture, onBack }) {
   return (
     <>
       {fullscreenPortal}
-
       <div className="flex flex-col items-center gap-3 w-full">
-
-        {/* AVISO */}
         {!photo && (
           <div className="bg-amber-500/10 border border-amber-400/30 rounded-xl px-4 py-3 w-full text-sm text-amber-300">
             <p className="font-semibold mb-1">📌 Antes de tomar la foto:</p>
@@ -225,24 +209,17 @@ export default function Camera({ onCapture, onBack }) {
           </div>
         )}
 
-        {/* BOTÓN ABRIR CÁMARA */}
         {!photo && !fullscreen && (
-          <button
-            onClick={handleOpenCamera}
-            className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl border border-white/20 transition-all active:scale-95"
-          >
+          <button onClick={handleOpenCamera} className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl border border-white/20 transition-all active:scale-95">
             📷 Abrir cámara
           </button>
         )}
 
-        {/* FOTO CAPTURADA */}
         {photo && (
           <div className="flex flex-col items-center gap-2 w-full">
             <img src={photo} className="rounded-2xl w-full h-64 object-cover border-2 border-green-400/50" />
             <p className="text-green-400 text-sm font-semibold">✅ Foto capturada correctamente</p>
-            <button onClick={retry} className="text-xs text-gray-400 underline">
-              🔄 Volver a tomar
-            </button>
+            <button onClick={retry} className="text-xs text-gray-400 underline">🔄 Volver a tomar</button>
           </div>
         )}
 
