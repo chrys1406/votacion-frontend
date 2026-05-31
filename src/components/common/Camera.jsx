@@ -57,8 +57,11 @@ export default function Camera({ onCapture, onBack }) {
       if (!video || !modelosCargados || video.readyState < 2) return;
 
       const deteccion = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks();
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks();
+
+console.log("Detección:", deteccion);
+console.log("Modelos cargados:", modelosCargados);
 
       if (!deteccion) {
         setRostroValido(false);
