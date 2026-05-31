@@ -31,7 +31,7 @@ export const registroService = async (form, fotoBase64) => {
   // 1. Validar foto y extraer embeddings
   let iaData;
   try {
-    const iaRes = await fetch("http://127.0.0.1:8001/extract-embeddings", {
+    const iaRes = await fetch(`${import.meta.env.VITE_IA_URL}/extract-embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imagen: fotoBase64 }),
@@ -66,7 +66,7 @@ export const registroService = async (form, fotoBase64) => {
     const blob = new Blob([bytes], { type: "image/jpeg" });
     formData.append("foto", blob, "foto.jpg");
 
-    const res = await fetch("http://localhost:8000/auth/registro", {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/registro`, {
       method: "POST",
       body: formData,
     });
