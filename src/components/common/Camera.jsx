@@ -74,7 +74,7 @@ export default function Camera({ onCapture, onBack }) {
         setRostroValido(false);
         setMensajeRostro("Error al conectar con el servidor");
       }
-    }, 2000);
+    }, 4000);
   }, [capturarFrame]);
 
   const handleOpenCamera = () => {
