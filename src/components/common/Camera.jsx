@@ -1,25 +1,17 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-
-const IA_URL = import.meta.env.VITE_IA_URL || "http://127.0.0.1:8001";
 
 export default function Camera({ onCapture, onBack }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const validacionIntervalRef = useRef(null);
   const [streaming, setStreaming] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [capturing, setCapturing] = useState(false);
-  const [rostroValido, setRostroValido] = useState(false);
-  const [mensajeRostro, setMensajeRostro] = useState("Posiciona tu rostro frente a la cámara");
 
   useEffect(() => {
-    return () => {
-      stopCamera();
-      clearInterval(validacionIntervalRef.current);
-    };
+    return () => stopCamera();
   }, []);
 
   useEffect(() => {
@@ -37,54 +29,19 @@ export default function Camera({ onCapture, onBack }) {
   };
 
   const stopCamera = () => {
-    clearInterval(validacionIntervalRef.current);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
     setStreaming(false);
-    setRostroValido(false);
-    setMensajeRostro("Posiciona tu rostro frente a la cámara");
   };
-
-  const capturarFrame = useCallback(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < 2) return null;
-    canvas.width = 320;
-    canvas.height = 240;
-    canvas.getContext("2d").drawImage(video, 0, 0, 320, 240);
-    return canvas.toDataURL("image/jpeg", 0.6);
-  }, []);
-
-  const iniciarValidacionTiempoReal = useCallback(() => {
-    validacionIntervalRef.current = setInterval(async () => {
-      const frame = capturarFrame();
-      if (!frame) return;
-      try {
-        const res = await fetch(`${IA_URL}/validar-frame`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imagen: frame }),
-        });
-        const data = await res.json();
-        setRostroValido(data.valido);
-        setMensajeRostro(data.mensaje);
-      } catch {
-        setRostroValido(false);
-        setMensajeRostro("Error al conectar con el servidor");
-      }
-    }, 6000);
-  }, [capturarFrame]);
 
   const handleOpenCamera = () => {
     setFullscreen(true);
     startCamera();
-    setTimeout(() => iniciarValidacionTiempoReal(), 1000);
   };
 
   const handleCapture = () => {
-    clearInterval(validacionIntervalRef.current);
     setCapturing(true);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -107,7 +64,6 @@ export default function Camera({ onCapture, onBack }) {
     setPhoto(null);
     setFullscreen(true);
     startCamera();
-    setTimeout(() => iniciarValidacionTiempoReal(), 1000);
   };
 
   const handleBack = () => {
@@ -125,25 +81,6 @@ export default function Camera({ onCapture, onBack }) {
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", transform: "scaleX(-1)", margin: 0, padding: 0, display: "block", backgroundColor: "black" }}
       />
 
-      {!capturing && streaming && (
-        <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, zIndex: 100000 }}>
-          <div style={{
-            width: 16, height: 16, borderRadius: "50%",
-            backgroundColor: rostroValido ? "#22c55e" : "#ef4444",
-            boxShadow: rostroValido ? "0 0 12px #22c55e" : "0 0 12px #ef4444",
-            transition: "all 0.3s ease",
-          }} />
-          <div style={{
-            backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: "6px 16px",
-            color: rostroValido ? "#22c55e" : "#ef4444",
-            fontSize: 13, fontWeight: "bold", textAlign: "center", maxWidth: "80%",
-            transition: "all 0.3s ease",
-          }}>
-            {rostroValido ? "✅ " : "⚠️ "}{mensajeRostro}
-          </div>
-        </div>
-      )}
-
       {capturing && (
         <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.75)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 100001, gap: 16 }}>
           <div style={{ width: 48, height: 48, border: "4px solid rgba(255,255,255,0.2)", borderTop: "4px solid white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
@@ -156,21 +93,20 @@ export default function Camera({ onCapture, onBack }) {
         <div style={{ position: "absolute", bottom: 40, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, zIndex: 100000 }}>
           <button
             onClick={handleCapture}
-            disabled={!streaming || !rostroValido}
+            disabled={!streaming}
             style={{
               width: 80, height: 80, borderRadius: "50%",
-              backgroundColor: rostroValido ? "white" : "rgba(255,255,255,0.3)",
-              border: `4px solid ${rostroValido ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)"}`,
-              boxShadow: rostroValido ? "0 0 30px rgba(255,255,255,0.4)" : "none",
+              backgroundColor: "white",
+              border: "4px solid rgba(255,255,255,0.5)",
+              boxShadow: "0 0 30px rgba(255,255,255,0.4)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: rostroValido ? "pointer" : "not-allowed",
-              transition: "all 0.3s ease",
+              cursor: "pointer",
             }}
           >
-            <div style={{ width: 56, height: 56, borderRadius: "50%", backgroundColor: rostroValido ? "white" : "rgba(255,255,255,0.3)", border: "2px solid #ccc" }} />
+            <div style={{ width: 56, height: 56, borderRadius: "50%", backgroundColor: "white", border: "2px solid #ccc" }} />
           </button>
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>
-            {rostroValido ? "¡Listo! Toca el botón para capturar" : "Esperando rostro válido..."}
+            Toca el botón para capturar
           </p>
           <button onClick={handleBack} style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}>
             ← Cancelar y volver
