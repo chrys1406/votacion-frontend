@@ -6,6 +6,7 @@ import { loadSlim } from "tsparticles-slim";
 import { plexusParticlesConfig } from "../../utils/particlesConfig";
 import { sparksParticles } from "../../utils/particlesSparks";
 import { registroService } from "../../services/authService";
+
 function AnimatedTitle() {
   const text = "Crear Cuenta";
   return (
@@ -33,7 +34,7 @@ export default function Register() {
   const [foto, setFoto] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  // Guarda qué campos ya fueron tocados
+  const [procesando, setProcesando] = useState(false);
   const [touched, setTouched] = useState({});
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -51,30 +52,6 @@ export default function Register() {
     setStep(2);
   };
 
-const handleSubmit = async () => {
-  if (!foto) {
-    setError("Debes tomar una foto para continuar.");
-    return;
-  }
-
-  setLoading(true);  // ← mostrar spinner PRIMERO
-  setError("");
-  
-  // Espera 50ms para que React renderice el spinner antes de procesar
-  await new Promise(resolve => setTimeout(resolve, 50));
-
-  try {
-    const resultado = await registroService(form, foto);
-    console.log("Registro exitoso:", resultado);
-    navigate("/");
-  } catch (err) {
-    console.error("Error registro:", err);
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
-  // Al volver desde la cámara, resetea la foto también
   const handleBack = () => {
     setFoto(null);
     setStep(1);
@@ -84,7 +61,6 @@ const handleSubmit = async () => {
     await loadSlim(engine);
   }, []);
 
-  // Clase dinámica para inputs: blanco si fue tocado, transparente si no
   const inputClass = (name) =>
     `w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all backdrop-blur-md ${
       touched[name]
@@ -103,6 +79,9 @@ const handleSubmit = async () => {
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(24px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .animate-fadeInUp {
           animation: fadeInUp 0.6s ease forwards;
@@ -182,20 +161,29 @@ const handleSubmit = async () => {
                 Necesitamos una foto para verificar tu identidad al votar.
               </p>
 
-              {/* Se pasa handleBack para apagar cámara antes de volver */}
-              <Camera onCapture={(dataUrl) => setFoto(dataUrl)} onBack={handleBack} />
+              <Camera
+                onCapture={async (dataUrl) => {
+                  setFoto(dataUrl);
+                  setLoading(true);
+                  setError("");
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  try {
+                    const resultado = await registroService(form, dataUrl);
+                    console.log("Registro exitoso:", resultado);
+                    navigate("/");
+                  } catch (err) {
+                    console.error("Error registro:", err);
+                    setError(err.message);
+                  } finally {
+                    setLoading(false);
+                    setProcesando(false);
+                  }
+                }}
+                onBack={handleBack}
+                onProcessing={setProcesando}
+              />
 
               {error && <p className="text-red-400 text-xs text-center">{error}</p>}
-
-              {foto && (
-                <button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="w-full bg-green-500/80 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-95 border border-green-400/30"
-                >
-                  {loading ? "⏳ Procesando..." : "✓ Completar registro"}
-                  </button>
-                )}
 
               <button onClick={handleBack} className="text-xs text-gray-400 underline">
                 ← Volver a los datos
@@ -215,6 +203,16 @@ const handleSubmit = async () => {
           © 2026 Facultad de Ingeniería - Sistemas
         </p>
       </div>
+
+      {/* MODAL PROCESANDO IA */}
+      {(loading || procesando) && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <div style={{ width: 56, height: 56, border: "4px solid rgba(255,255,255,0.1)", borderTop: "4px solid #E8FF47", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+          <p style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>🤖 Analizando rostro con IA...</p>
+          <p style={{ color: "#888", fontSize: 12, textAlign: "center", maxWidth: 260 }}>Esto puede tardar unos segundos, por favor espera</p>
+        </div>
+      )}
+
     </div>
   );
 }
