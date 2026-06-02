@@ -57,9 +57,13 @@ const handleSubmit = async () => {
     return;
   }
 
+  setLoading(true);  // ← mostrar spinner PRIMERO
+  setError("");
+  
+  // Espera 50ms para que React renderice el spinner antes de procesar
+  await new Promise(resolve => setTimeout(resolve, 50));
+
   try {
-    setLoading(true);
-    setError("");
     const resultado = await registroService(form, foto);
     console.log("Registro exitoso:", resultado);
     navigate("/");
@@ -70,7 +74,6 @@ const handleSubmit = async () => {
     setLoading(false);
   }
 };
-
   // Al volver desde la cámara, resetea la foto también
   const handleBack = () => {
     setFoto(null);

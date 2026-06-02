@@ -41,28 +41,26 @@ export default function Camera({ onCapture, onBack }) {
     startCamera();
   };
 
-  const handleCapture = () => {
-    setCapturing(true);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const canvas = canvasRef.current;
-        const video = videoRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        // Corregir efecto espejo
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, 0, 0);
-        const dataUrl = canvas.toDataURL("image/jpeg");
-        stopCamera();
-        setFullscreen(false);
-        setCapturing(false);
-        setPhoto(dataUrl);
-        onCapture(dataUrl);
-      });
-    });
-  };
+const handleCapture = () => {
+  setCapturing(true);
+  setTimeout(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    // Corregir efecto espejo
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg");
+    stopCamera();
+    setFullscreen(false);
+    setCapturing(false);
+    setPhoto(dataUrl);
+    onCapture(dataUrl);
+  }, 100);
+};
 
   const retry = () => {
     setPhoto(null);
