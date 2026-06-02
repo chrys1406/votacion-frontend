@@ -34,7 +34,6 @@ export default function Register() {
   const [foto, setFoto] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [procesando, setProcesando] = useState(false);
   const [touched, setTouched] = useState({});
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -50,6 +49,28 @@ export default function Register() {
     }
     setError("");
     setStep(2);
+  };
+
+  const handleSubmit = async () => {
+    if (!foto) {
+      setError("Debes tomar una foto para continuar.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    try {
+      const resultado = await registroService(form, foto);
+      console.log("Registro exitoso:", resultado);
+      navigate("/");
+    } catch (err) {
+      console.error("Error registro:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBack = () => {
@@ -161,29 +182,19 @@ export default function Register() {
                 Necesitamos una foto para verificar tu identidad al votar.
               </p>
 
-              <Camera
-                onCapture={async (dataUrl) => {
-                  setFoto(dataUrl);
-                  setLoading(true);
-                  setError("");
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                  try {
-                    const resultado = await registroService(form, dataUrl);
-                    console.log("Registro exitoso:", resultado);
-                    navigate("/");
-                  } catch (err) {
-                    console.error("Error registro:", err);
-                    setError(err.message);
-                  } finally {
-                    setLoading(false);
-                    setProcesando(false);
-                  }
-                }}
-                onBack={handleBack}
-                onProcessing={setProcesando}
-              />
+              <Camera onCapture={(dataUrl) => setFoto(dataUrl)} onBack={handleBack} />
 
               {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+
+              {foto && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="w-full bg-green-500/80 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-95 border border-green-400/30"
+                >
+                  {loading ? "⏳ Analizando rostro con IA..." : "✓ Completar registro"}
+                </button>
+              )}
 
               <button onClick={handleBack} className="text-xs text-gray-400 underline">
                 ← Volver a los datos
@@ -205,7 +216,7 @@ export default function Register() {
       </div>
 
       {/* MODAL PROCESANDO IA */}
-      {(loading || procesando) && (
+      {loading && (
         <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
           <div style={{ width: 56, height: 56, border: "4px solid rgba(255,255,255,0.1)", borderTop: "4px solid #E8FF47", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
           <p style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>🤖 Analizando rostro con IA...</p>
