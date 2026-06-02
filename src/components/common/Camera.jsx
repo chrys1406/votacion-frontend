@@ -133,7 +133,7 @@ export default function Camera({ onCapture, onBack, onProcessing }) {
               }}
             />
             <p style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>
-              🤖 Analizando rostro con IA...
+               Analizando rostro con ...
             </p>
             <p
               style={{
