@@ -1,4 +1,5 @@
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const IA_URL = import.meta.env.VITE_IA_URL || "http://127.0.0.1:8001";
 
 export const loginService = async (registro, cedula) => {
   try {
@@ -10,14 +11,13 @@ export const loginService = async (registro, cedula) => {
 
     if (!res.ok) {
       const error = await res.json();
-      throw new Error(error.detail || "Credenciales incorrectas");
+      throw new Error(error.detail || "Registro o cédula incorrectos");
     }
 
     return await res.json();
   } catch (err) {
-    // Si es error de red (backend apagado)
     if (err.message === "Failed to fetch") {
-      throw new Error("No se puede conectar con el servidor");
+      throw new Error("No se pudo conectar. Verifica tu conexión a internet.");
     }
     throw err;
   }
@@ -25,34 +25,44 @@ export const loginService = async (registro, cedula) => {
 
 
 export const registroService = async (form, fotoBase64) => {
-  console.log("1. Iniciando registro...");
-  console.log("2. Mandando foto al microservicio IA...");
 
-  // 1. Validar foto y extraer embeddings
+  // 1. Extraer embedding del rostro
   let iaData;
   try {
-    const iaRes = await fetch(`${import.meta.env.VITE_IA_URL}/extract-embeddings`, {
+    const iaRes = await fetch(`${IA_URL}/extract-embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imagen: fotoBase64 }),
     });
-    console.log("3. Respuesta microservicio IA:", iaRes.status);
 
     if (!iaRes.ok) {
       const error = await iaRes.json();
-      throw new Error(error.detail || "Error al procesar la foto");
+      // Mensajes del microservicio más amigables
+      const mensaje = error.detail || "No se pudo procesar la foto";
+      if (mensaje.includes("No se detectó ningún rostro")) {
+        throw new Error("No se detectó ningún rostro. Asegúrate de tener buena iluminación y mirar directo a la cámara.");
+      }
+      if (mensaje.includes("ojos")) {
+        throw new Error("No se detectaron los ojos. Por favor quítate los lentes oscuros o la gorra.");
+      }
+      if (mensaje.includes("oscura")) {
+        throw new Error("La imagen está muy oscura. Busca mejor iluminación.");
+      }
+      if (mensaje.includes("foto o pantalla")) {
+        throw new Error("Se detectó una foto en pantalla. Por favor usa tu rostro real frente a la cámara.");
+      }
+      throw new Error(mensaje);
     }
 
     iaData = await iaRes.json();
-    console.log("4. Embedding extraído correctamente, dimensiones:", iaData.embedding?.length);
   } catch (err) {
-    console.error("ERROR en microservicio IA:", err);
-    throw new Error("Error en reconocimiento facial: " + err.message);
+    if (err.message === "Failed to fetch") {
+      throw new Error("No se pudo conectar con el servicio de reconocimiento facial. Intenta de nuevo en unos segundos.");
+    }
+    throw err;
   }
 
-  console.log("5. Mandando datos al backend...");
-
-  // 2. Mandar todo al backend
+  // 2. Registrar en el backend
   try {
     const formData = new FormData();
     formData.append("nombre", form.nombre);
@@ -66,24 +76,29 @@ export const registroService = async (form, fotoBase64) => {
     const blob = new Blob([bytes], { type: "image/jpeg" });
     formData.append("foto", blob, "foto.jpg");
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/registro`, {
+    const res = await fetch(`${BASE_URL}/auth/registro`, {
       method: "POST",
       body: formData,
     });
 
-    console.log("6. Respuesta backend:", res.status);
-
     if (!res.ok) {
       const error = await res.json();
-      throw new Error(error.detail || "Error al registrarse");
+      const mensaje = error.detail || "No se pudo completar el registro";
+      if (mensaje.includes("registro, correo o cédula")) {
+        throw new Error("Ya existe una cuenta con ese registro, correo o cédula.");
+      }
+      if (mensaje.includes("rostro ya está registrado")) {
+        throw new Error("Este rostro ya tiene una cuenta registrada en el sistema.");
+      }
+      throw new Error(mensaje);
     }
 
-    const data = await res.json();
-    console.log("7. Registro exitoso:", data);
-    return data;
+    return await res.json();
 
   } catch (err) {
-    console.error("ERROR en backend:", err);
+    if (err.message === "Failed to fetch") {
+      throw new Error("No se pudo conectar con el servidor. Verifica tu conexión.");
+    }
     throw err;
   }
 };

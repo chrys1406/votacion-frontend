@@ -219,7 +219,7 @@ export default function Register() {
       {loading && (
         <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
           <div style={{ width: 56, height: 56, border: "4px solid rgba(255,255,255,0.1)", borderTop: "4px solid #E8FF47", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-          <p style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>🤖 Analizando rostro con IA...</p>
+          <p style={{ color: "white", fontSize: 16, fontWeight: "bold" }}> Analizando rostro...</p>
           <p style={{ color: "#888", fontSize: 12, textAlign: "center", maxWidth: 260 }}>Esto puede tardar unos segundos, por favor espera</p>
         </div>
       )}
