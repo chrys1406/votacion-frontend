@@ -49,7 +49,11 @@ export default function Camera({ onCapture, onBack }) {
         const video = videoRef.current;
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        canvas.getContext("2d").drawImage(video, 0, 0);
+        const ctx = canvas.getContext("2d");
+        // Corregir efecto espejo
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0);
         const dataUrl = canvas.toDataURL("image/jpeg");
         stopCamera();
         setFullscreen(false);
