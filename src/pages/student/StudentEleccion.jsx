@@ -12,7 +12,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export default function StudentEleccion() {
   const { id } = useParams();
   const { user, token } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useNavigate(); 
   const { isMobile } = useWindowSize();
 
   const [candidatos, setCandidatos] = useState([]);
@@ -88,7 +88,7 @@ const handleVotar = () => {
       const { embedding } = await embeddingRes.json();
 
       // Comparar 1:1 con el microservicio IA
-      const compareRes = await fetch("http://127.0.0.1:8001/compare-1v1", {
+      const compareRes = await fetch(`${import.meta.env.VITE_IA_URL}/compare-1v1`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imagen: foto, embedding }),
